@@ -3,6 +3,7 @@ import https from "https";
 import express from "express";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import bodyParser from "body-parser";
 
 // 載入環境變數
 dotenv.config();
@@ -31,44 +32,35 @@ const validateSignature = (signature, body) => {
 };
 
 // Webhook 路由 - 處理來自 LINE 的訊息
-app.post("/webhook", (req, res) => {
-  res.send("✅ HTTP POST request sent to the webhook URL!");
-
+app.post("/webhook", bodyParser.raw({ type: "*/*" }), (req, res) => {
   const signature = req.headers["x-line-signature"];
-  const body = JSON.stringify(req.body);
+  const body = req.body.toString("utf-8");
 
-  // 驗證簽名
+  // 簽名驗證
   if (!validateSignature(signature, body)) {
+    console.error("❌ 簽名驗證失敗");
     return res.status(403).send("Invalid signature");
   }
 
-  // 檢查是否為訊息事件
-  if (req.body.events && req.body.events[0].type === "message") {
-    const replyToken = req.body.events[0].replyToken;
-    const userMessage = req.body.events[0].message.text;
+  console.log("✅ 簽名驗證成功");
+  res.status(200).send("Webhook received");
 
-    // 回覆訊息內容
+  // 處理訊息事件
+  const event = JSON.parse(body).events[0];
+  if (event && event.type === "message") {
+    const replyToken = event.replyToken;
+    const userMessage = event.message.text;
+
     const dataString = JSON.stringify({
       replyToken: replyToken,
-      messages: [
-        {
-          type: "text",
-          text: `你說了：${userMessage}`,
-        },
-        {
-          type: "text",
-          text: "有什麼我可以幫忙的嗎？😊",
-        },
-      ],
+      messages: [{ type: "text", text: `你說了：${userMessage}` }],
     });
 
-    // 設定請求標頭
     const headers = {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${process.env.LINE_ACCESS_TOKEN}`,
     };
 
-    // 設定發送到 LINE API 的請求參數
     const webhookOptions = {
       hostname: "api.line.me",
       path: "/v2/bot/message/reply",
@@ -76,19 +68,12 @@ app.post("/webhook", (req, res) => {
       headers: headers,
     };
 
-    // 發送 HTTP 請求到 LINE API
     const request = https.request(webhookOptions, (response) => {
-      response.on("data", (d) => {
-        process.stdout.write(d);
-      });
+      response.on("data", (d) => process.stdout.write(d));
     });
 
-    // 錯誤處理
-    request.on("error", (err) => {
-      console.error("❌ 發送回覆失敗：", err);
-    });
+    request.on("error", (err) => console.error("❌ 發送訊息失敗：", err));
 
-    // 發送請求
     request.write(dataString);
     request.end();
   }
