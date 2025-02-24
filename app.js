@@ -34,6 +34,9 @@ const validateSignature = (signature, body) => {
 app.post("/webhook", (req, res) => {
   res.send("✅ HTTP POST request sent to the webhook URL!");
 
+  const signature = req.headers["x-line-signature"];
+  const body = JSON.stringify(req.body);
+
   // 驗證簽名
   if (!validateSignature(signature, body)) {
     return res.status(403).send("Invalid signature");
@@ -93,5 +96,5 @@ app.post("/webhook", (req, res) => {
 
 // 啟動伺服器
 app.listen(PORT, () => {
-  console.log(`🚀 LINE Bot 伺服器運行中！http://localhost:${PORT}`);
+  console.log("🚀 LINE Bot 伺服器運行中！");
 });
